@@ -1,4 +1,5 @@
 use std::mem;
+use std::collections::HashMap;
 
 use num::bigint::{self, ToBigInt};
 use num::traits::{Zero, One};
@@ -8,6 +9,7 @@ use encoding::all::ISO_8859_1;
 
 use bertterm::BertTerm;
 use error::{Result, BertError};
+use symtable::Symtable;
 
 const BERT_MAGIC_NUMBER: u8 = 131;
 const SMALL_INTEGER_EXT: u8 = 97;
@@ -32,18 +34,26 @@ const MAP_EXT: u8 = 116;
 pub struct Parser {
     contents: Vec<u8>,
     pos: usize,
+    symtable: Symtable,
+    seen: HashMap<String, (usize, usize)>,
 }
 
 impl Parser {
     pub fn new(contents: Vec<u8>) -> Parser {
-        Parser { contents: contents, pos: 0 }
+        Parser {
+            contents: contents,
+            pos: 0,
+            symtable: Symtable::new(),
+            seen: HashMap::new(),
+        }
     }
 
-    pub fn parse(&mut self) -> Result<BertTerm> {
+    pub fn parse(&mut self) -> Result<(BertTerm, Symtable)> {
         let () = self.magic_number()?;
         let term = self.bert_term()?;
         if self.eof() {
-            return Ok(term);
+            let symtable = mem::replace(&mut self.symtable, Symtable::with_capacity(1));
+            return Ok((term, symtable));
         } else {
             return Err(BertError::ExtraData(self.pos));
         }
@@ -149,7 +159,10 @@ impl Parser {
             bytes.push(self.eat_u8()?);
         }
         ISO_8859_1.decode(&bytes, DecoderTrap::Strict)
-            .map(|s| BertTerm::Atom(s))
+            .map(|s| {
+                let (offset, length) = self.get_offset_and_length(&s);
+                BertTerm::Atom{ offset, length }
+            })
             .map_err(|_| BertError::InvalidLatin1Atom(offset))
     }
 
@@ -160,7 +173,10 @@ impl Parser {
             buf.push(self.eat_u8()?);
         }
         String::from_utf8(buf)
-            .map(|s| BertTerm::Atom(s))
+            .map(|s| {
+                let (offset, length) = self.get_offset_and_length(&s);
+                BertTerm::Atom{ offset, length }
+            })
             .map_err(|_| BertError::InvalidUTF8Atom(offset))
     }
 
@@ -289,5 +305,16 @@ impl Parser {
         n += (self.eat_u8()? as u64) << 8;
         n += self.eat_u8()? as u64;
         return Ok(n);
+    }
+
+    fn get_offset_and_length(&mut self, s: &str) -> (usize, usize) {
+        let already_seen = self.seen.contains_key(s);
+        if already_seen {
+            *self.seen.get(s).unwrap()
+        } else {
+            let (offset, length) = self.symtable.add(s);
+            self.seen.insert(s.to_owned(), (offset, length));
+            return (offset, length)
+        }
     }
 }

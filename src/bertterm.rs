@@ -2,6 +2,7 @@ use std::fmt::{self, Write};
 
 use num::bigint;
 
+use symtable::Symtable;
 
 pub const DEFAULT_INDENT_WIDTH: usize = 2;
 pub const DEFAULT_MAX_TERMS_PER_LINE: usize = 4;
@@ -13,7 +14,7 @@ pub enum BertTerm {
     Int(i32),
     BigInt(bigint::BigInt),
     Float(f64),
-    Atom(String),
+    Atom { offset: usize, length: usize },
     Tuple(Vec<BertTerm>),
     List(Vec<BertTerm>),
     Map(Vec<BertTerm>, Vec<BertTerm>),
@@ -27,7 +28,7 @@ impl BertTerm {
             BertTerm::Int(_)
             | BertTerm::BigInt(_)
             | BertTerm::Float(_)
-            | BertTerm::Atom(_)
+            | BertTerm::Atom { offset: _, length: _ }
             | BertTerm::String(_)
             | BertTerm::Binary(_)
             | BertTerm::Nil => true,
@@ -38,20 +39,12 @@ impl BertTerm {
     }
 }
 
-impl fmt::Display for BertTerm {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let pp = PrettyPrinter::new(self,
-                                    DEFAULT_INDENT_WIDTH,
-                                    DEFAULT_MAX_TERMS_PER_LINE);
-        write!(f, "{}", pp)
-    }
-}
-
 
 pub struct PrettyPrinter<'a> {
     term: &'a BertTerm,
     indent_width: usize,
-    max_terms_per_line: usize
+    max_terms_per_line: usize,
+    symtable: &'a Symtable
 }
 
 impl <'a> fmt::Display for PrettyPrinter<'a> {
@@ -67,8 +60,9 @@ impl <'a> PrettyPrinter<'a> {
     /// integers, floats, strings) can be printed per line.
     pub fn new(term: &'a BertTerm,
                indent_width: usize,
-               max_terms_per_line: usize) -> Self {
-        PrettyPrinter { term, indent_width, max_terms_per_line }
+               max_terms_per_line: usize,
+               symtable: &'a Symtable) -> Self {
+        PrettyPrinter { term, indent_width, max_terms_per_line, symtable }
     }
 
 
@@ -78,7 +72,10 @@ impl <'a> PrettyPrinter<'a> {
             BertTerm::Int(n) => write!(f, "{}", n),
             BertTerm::BigInt(ref n) => write!(f, "{}", n),
             BertTerm::Float(x) => write!(f, "{}", x),
-            BertTerm::Atom(ref s) => f.write_str(s),
+            BertTerm::Atom { offset, length } => {
+                let s = self.symtable.get(offset, length);
+                f.write_str(s)
+            }
             BertTerm::String(ref bytes) => self.write_string(bytes, f, "\"", "\""),
             BertTerm::Binary(ref bytes) => self.write_string(bytes, f, "<<\"", "\">>"),
             BertTerm::List(ref terms) => self.write_collection(terms, f, depth, '[', ']'),

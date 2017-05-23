@@ -15,6 +15,7 @@ use ppbert::bertterm::{
     DEFAULT_MAX_TERMS_PER_LINE
 };
 use ppbert::error::Result;
+use ppbert::symtable::Symtable;
 
 
 fn main() {
@@ -48,22 +49,22 @@ fn main() {
         .unwrap_or(DEFAULT_MAX_TERMS_PER_LINE);
 
     let mut return_code = 0;
-    for file in files {
-        let _ = parse_and_print(file)
-            .map(|ref t| {
-                let pp = PrettyPrinter::new(t, indent_level, max_per_line);
+    for filename in files {
+        let _ = parse_file(filename)
+            .map(|(ref t, ref symtable)| {
+                let pp = PrettyPrinter::new(t, indent_level, max_per_line, symtable);
                 println!("{}", pp)
             })
             .map_err(|ref e| {
                 return_code = 1;
-                writeln!(&mut io::stderr(), "ppbert: {}: {}", file, e)
+                writeln!(&mut io::stderr(), "ppbert: {}: {}", filename, e)
             });
     }
     exit(return_code);
 }
 
 
-fn parse_and_print(file: &str) -> Result<BertTerm> {
+fn parse_file(file: &str) -> Result<(BertTerm, Symtable)> {
     let mut buf: Vec<u8> = Vec::new();
     if file == "-" {
         let mut stdin = io::stdin();

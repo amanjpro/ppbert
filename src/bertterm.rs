@@ -13,6 +13,7 @@ pub enum BertTerm {
     Int(i32),
     BigInt(bigint::BigInt),
     Float(f64),
+    SmallAtom(u64),
     Atom(String),
     Tuple(Vec<BertTerm>),
     List(Vec<BertTerm>),
@@ -27,6 +28,7 @@ impl BertTerm {
             BertTerm::Int(_)
             | BertTerm::BigInt(_)
             | BertTerm::Float(_)
+            | BertTerm::SmallAtom(_)
             | BertTerm::Atom(_)
             | BertTerm::String(_)
             | BertTerm::Binary(_)
@@ -78,6 +80,13 @@ impl <'a> PrettyPrinter<'a> {
             BertTerm::Int(n) => write!(f, "{}", n),
             BertTerm::BigInt(ref n) => write!(f, "{}", n),
             BertTerm::Float(x) => write!(f, "{}", x),
+            BertTerm::SmallAtom(mut x) => {
+                while x != 0 {
+                    f.write_char(((x & 0xff) as u8) as char)?;
+                    x >>= 8;
+                }
+                Ok(())
+            }
             BertTerm::Atom(ref s) => f.write_str(s),
             BertTerm::String(ref bytes) => self.write_string(bytes, f, "\"", "\""),
             BertTerm::Binary(ref bytes) => self.write_string(bytes, f, "<<\"", "\">>"),

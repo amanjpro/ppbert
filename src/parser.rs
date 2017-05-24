@@ -69,11 +69,19 @@ impl Parser {
             NEW_FLOAT_EXT => { self.new_float() }
             ATOM_EXT => {
                 let len = self.eat_u16_be()? as usize;
-                self.atom(len)
+                if len <= 8 {
+                    self.small_atom(len)
+                } else {
+                    self.atom(len)
+                }
             }
             SMALL_ATOM_EXT => {
                 let len = self.eat_u8()? as usize;
-                self.atom(len)
+                if len <= 8 {
+                    self.small_atom(len)
+                } else {
+                    self.atom(len)
+                }
             }
             ATOM_UTF8_EXT => {
                 let len = self.eat_u16_be()? as usize;
@@ -140,6 +148,15 @@ impl Parser {
         let raw_bytes = self.eat_u64_be()?;
         let f: f64 = unsafe { mem::transmute(raw_bytes) };
         Ok(BertTerm::Float(f))
+    }
+
+    fn small_atom(&mut self, len: usize) -> Result<BertTerm> {
+        let mut x: u64 = 0;
+        for i in 0 .. len {
+            let b = self.eat_u8()? as u64;
+            x |= b << (i*8);
+        }
+        return Ok(BertTerm::SmallAtom(x));
     }
 
     fn atom(&mut self, len: usize) -> Result<BertTerm> {

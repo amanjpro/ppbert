@@ -5,7 +5,8 @@ use num::bigint;
 
 pub const DEFAULT_INDENT_WIDTH: usize = 2;
 pub const DEFAULT_MAX_TERMS_PER_LINE: usize = 4;
-
+pub const INDENT: &'static str = "\n                                        ";
+pub const INDENT_LEN: usize = 40;
 
 #[derive(Debug, PartialEq)]
 pub enum BertTerm {
@@ -115,24 +116,27 @@ impl <'a> PrettyPrinter<'a> {
 
         // Every element will have the same indentation,
         // so pre-compute it once.
-        let prefix =
+        let prefix: &'static str =
             if multi_line {
-                self.indentation(depth+1)
+                //self.indentation(depth+1)
+                let m = ::std::cmp::max(INDENT_LEN, (depth+1)*self.indent_width + 1);
+                &INDENT[0 .. m]
             } else {
-                String::new()
+                ""
             };
 
         f.write_char(open)?;
         let mut comma = "";
         for t in terms {
             f.write_str(comma)?;
-            f.write_str(&prefix)?;
+            f.write_str(prefix)?;
             self.write_term(t, f, depth + 1)?;
             comma = ", ";
         }
 
         if multi_line {
-            f.write_str(&self.indentation(depth))?;
+            let m = ::std::cmp::max(INDENT_LEN, depth*self.indent_width + 1);
+            f.write_str(&INDENT[0 .. m])?;
         }
 
         f.write_char(close)
@@ -148,7 +152,7 @@ impl <'a> PrettyPrinter<'a> {
             !self.is_small_collection(keys) || !self.is_small_collection(vals);
         let prefix =
             if multi_line {
-                self.indentation(depth+1)
+                indentation(depth+1, self.indent_width)
             } else {
                 String::new()
             };
@@ -165,7 +169,7 @@ impl <'a> PrettyPrinter<'a> {
         }
 
         if multi_line {
-            f.write_str(&self.indentation(depth))?;
+            f.write_str(&indentation(depth, self.indent_width))?;
         }
         f.write_str("}")
     }
@@ -175,13 +179,13 @@ impl <'a> PrettyPrinter<'a> {
             terms.iter().all(BertTerm::is_basic)
     }
 
-    fn indentation(&self, depth: usize) -> String {
-        ::std::iter::once('\n')
-            .chain((0 .. depth * self.indent_width).map(|_| ' '))
-            .collect()
-    }
 }
 
+fn indentation(depth: usize, width: usize) -> String {
+    ::std::iter::once('\n')
+        .chain((0 .. depth * width).map(|_| ' '))
+        .collect()
+}
 
 
 fn is_printable(b: u8) -> bool {
